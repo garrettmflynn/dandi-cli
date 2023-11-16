@@ -80,23 +80,18 @@ def validate_bids(
             )
         )
 
-    for pattern in validation_result["schema_tracking"]:
-        # Future proofing for standard-compliant name.
-        if pattern.get("mandatory") or pattern.get("required"):
-            # We don't have a path for this so we'll need some external logic to make sure
-            # that the dataset path is populated.
-            # dataset_path = find_parent_directory_containing(paths, path)
-            our_validation_result.append(
-                ValidationResult(
-                    origin=origin,
-                    severity=Severity.ERROR,
-                    id="BIDS.MANDATORY_FILE_MISSING_PLACEHOLDER",
-                    scope=Scope.DATASET,
-                    path_regex=pattern["regex"],
-                    message="BIDS-required file is not present.",
-                )
-            )
-
+    our_validation_result.extend(
+        ValidationResult(
+            origin=origin,
+            severity=Severity.ERROR,
+            id="BIDS.MANDATORY_FILE_MISSING_PLACEHOLDER",
+            scope=Scope.DATASET,
+            path_regex=pattern["regex"],
+            message="BIDS-required file is not present.",
+        )
+        for pattern in validation_result["schema_tracking"]
+        if pattern.get("mandatory") or pattern.get("required")
+    )
     # Storing variable to not re-compute set paths for each individual file.
     parent_path = None
     for meta in validation_result["match_listing"]:

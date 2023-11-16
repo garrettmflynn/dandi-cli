@@ -158,7 +158,7 @@ def test_time_samples(t: str) -> None:
 def test_flatten() -> None:
     assert inspect.isgenerator(flatten([1]))
     # flattened is just a list() around flatten
-    assert flattened([1, [2, 3, [4]], 5, (i for i in range(2))]) == [
+    assert flattened([1, [2, 3, [4]], 5, iter(range(2))]) == [
         1,
         2,
         3,

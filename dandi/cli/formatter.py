@@ -26,9 +26,7 @@ class JSONFormatter(Formatter):
 
     @staticmethod
     def _serializer(o):
-        if isinstance(o, datetime.datetime):
-            return str(o)
-        return o
+        return str(o) if isinstance(o, datetime.datetime) else o
 
     def __enter__(self):
         print("[", end="", file=self.out)
@@ -61,9 +59,7 @@ class JSONLinesFormatter(Formatter):
 
     @staticmethod
     def _serializer(o):
-        if isinstance(o, datetime.datetime):
-            return str(o)
-        return o
+        return str(o) if isinstance(o, datetime.datetime) else o
 
     def __call__(self, rec):
         import json

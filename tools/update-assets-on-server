@@ -89,8 +89,6 @@ def process_dandiset(dandiset, update, api_key):
     ul.info(f"Total assets: {len(assets)}")
 
     missing = []
-    couldnotupdate = []
-
     for asset in assets:
         blob_id = asset["blob_id"]
         localpath = f"{blobdir}/{blob_id[:3]}/{blob_id[3:6]}/{blob_id}"
@@ -100,6 +98,8 @@ def process_dandiset(dandiset, update, api_key):
         ul.error(f"could not find these blobs locally: {missing}")
         ul.error(len(missing))
     else:
+        couldnotupdate = []
+
         for asset in assets:
             blob_id = asset["blob_id"]
             localpath = f"{blobdir}/{blob_id[:3]}/{blob_id[3:6]}/{blob_id}"

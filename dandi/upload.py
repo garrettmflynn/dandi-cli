@@ -186,12 +186,6 @@ def upload(
                             raise UploadError("failed validation")
                     else:
                         yield {"status": "validated"}
-                else:
-                    # yielding empty causes pyout to get stuck or crash
-                    # https://github.com/pyout/pyout/issues/91
-                    # yield {"errors": '',}
-                    pass
-
                 #
                 # Special handling for dandiset.yaml
                 # Yarik hates it but that is life for now. TODO
@@ -222,7 +216,7 @@ def upload(
                     try:
                         file_etag = dfile.get_digest()
                     except Exception as exc:
-                        raise UploadError("failed to compute digest: %s" % str(exc))
+                        raise UploadError(f"failed to compute digest: {str(exc)}")
 
                 try:
                     extant = remote_dandiset.get_asset_by_path(dfile.path)
@@ -253,7 +247,7 @@ def upload(
                         digest=file_etag, ignore_errors=allow_any_path
                     ).json_dict()
                 except Exception as e:
-                    raise UploadError("failed to extract metadata: %s" % str(e))
+                    raise UploadError(f"failed to extract metadata: {str(e)}")
 
                 #
                 # Upload file
@@ -307,7 +301,7 @@ def upload(
             if not total:
                 return ""
             speed = total / dt if dt else 0
-            return "%s/s" % naturalsize(speed)
+            return f"{naturalsize(speed)}/s"
 
         pyout_style = pyouts.get_style(hide_if_missing=False)
         pyout_style["upload"]["aggregate"] = upload_agg
@@ -336,7 +330,7 @@ def upload(
                     if devel_debug:
                         # DEBUG: do serially
                         for v in process_path(dfile):
-                            print(str(v), flush=True)
+                            print(v, flush=True)
                     else:
                         rec[tuple(rec_fields[1:])] = process_path(dfile)
                 except ValueError as exc:
@@ -420,17 +414,25 @@ def check_replace_asset(
     if existing == "skip":
         return (False, skip_file(exists_msg))
     # Logic below only for overwrite and reupload
-    if existing == "overwrite":
-        if remote_etag == local_etag.value:
-            return (False, skip_file(exists_msg))
-    elif existing == "refresh":
-        if remote_etag == local_etag.value:
-            return (False, skip_file("file exists"))
-        elif remote_mtime is not None and remote_mtime >= local_mtime:
-            return (False, skip_file(exists_msg))
-    elif existing == "force":
+    if (
+        existing == "overwrite"
+        and remote_etag == local_etag.value
+        or existing != "overwrite"
+        and existing == "refresh"
+        and remote_etag != local_etag.value
+        and remote_mtime is not None
+        and remote_mtime >= local_mtime
+    ):
+        return (False, skip_file(exists_msg))
+    elif (
+        existing == "overwrite"
+        or existing == "refresh"
+        and remote_etag != local_etag.value
+    ):
         pass
-    else:
+    elif existing == "refresh":
+        return (False, skip_file("file exists"))
+    elif existing != "force":
         raise ValueError(f"invalid value for 'existing': {existing!r}")
     return (True, {"message": f"{exists_msg} - reuploading"})
 

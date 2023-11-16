@@ -129,8 +129,8 @@ def find_dandi_files(
                     # (ie., it's not a Zarr or any other directory asset type
                     # we may add later), so traverse through it as a regular
                     # directory.
-                    if os.path.lexists(p / BIDS_DATASET_DESCRIPTION) and not any(
-                        i in p.parents for i in bids_roots
+                    if os.path.lexists(p / BIDS_DATASET_DESCRIPTION) and all(
+                        i not in p.parents for i in bids_roots
                     ):  # No nested BIDS
                         bids2 = dandi_file(p / BIDS_DATASET_DESCRIPTION, dandiset_path)
                         assert isinstance(bids2, BIDSDatasetDescriptionAsset)
@@ -145,11 +145,9 @@ def find_dandi_files(
             # be returned
             if type(df) is GenericAsset and not allow_all:
                 pass
-            elif isinstance(df, DandisetMetadataFile) and not (
+            elif not isinstance(df, DandisetMetadataFile) or (
                 allow_all or include_metadata
             ):
-                pass
-            else:
                 yield df
 
 

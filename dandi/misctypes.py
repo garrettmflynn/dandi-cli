@@ -87,9 +87,8 @@ class BasePath(ABC):
         """
         if self.is_root():
             return ""
-        else:
-            assert self.parts
-            return self.parts[-1]
+        assert self.parts
+        return self.parts[-1]
 
     @abstractmethod
     def _get_subpath(self: P, name: str) -> P:
@@ -103,7 +102,7 @@ class BasePath(ABC):
 
     def __truediv__(self: P, path: str) -> P:
         p = self
-        for q in self._split_path(path):
+        for q in p._split_path(path):
             p = p._get_subpath(q)
         return p
 
@@ -169,10 +168,7 @@ class BasePath(ABC):
     def suffix(self) -> str:
         """The final file extension of the basename, if any"""
         i = self.name.rfind(".")
-        if 0 < i < len(self.name) - 1:
-            return self.name[i:]
-        else:
-            return ""
+        return self.name[i:] if 0 < i < len(self.name) - 1 else ""
 
     @property
     def suffixes(self) -> list[str]:
@@ -180,16 +176,13 @@ class BasePath(ABC):
         if self.name.endswith("."):
             return []
         name = self.name.lstrip(".")
-        return ["." + suffix for suffix in name.split(".")[1:]]
+        return [f".{suffix}" for suffix in name.split(".")[1:]]
 
     @property
     def stem(self) -> str:
         """The basename without its final file extension, if any"""
         i = self.name.rfind(".")
-        if 0 < i < len(self.name) - 1:
-            return self.name[:i]
-        else:
-            return self.name
+        return self.name[:i] if 0 < i < len(self.name) - 1 else self.name
 
     def with_stem(self: P, stem: str) -> P:
         """Returns a new path with the stem changed"""
@@ -209,15 +202,17 @@ class BasePath(ABC):
 
     def match(self, pattern: str) -> bool:
         """Tests whether the path matches the given glob pattern"""
-        patparts = self._split_path(pattern)
-        if not patparts:
+        if patparts := self._split_path(pattern):
+            return (
+                False
+                if len(patparts) > len(self.parts)
+                else all(
+                    fnmatchcase(part, pat)
+                    for part, pat in zip(reversed(self.parts), reversed(patparts))
+                )
+            )
+        else:
             raise ValueError("Empty pattern")
-        if len(patparts) > len(self.parts):
-            return False
-        for part, pat in zip(reversed(self.parts), reversed(patparts)):
-            if not fnmatchcase(part, pat):
-                return False
-        return True
 
     @abstractmethod
     def exists(self) -> bool:

@@ -118,21 +118,20 @@ class DandisetMetadataFile(DandiFile):
             return _check_required_fields(
                 meta, _required_dandiset_metadata_fields, str(self.filepath)
             )
-        else:
-            current_version = get_schema_version()
-            if schema_version != current_version:
-                raise ValueError(
-                    f"Unsupported schema version: {schema_version}; expected {current_version}"
-                )
-            try:
-                DandisetMeta(**meta)
-            except Exception as e:
-                if devel_debug:
-                    raise
-                return _pydantic_errors_to_validation_results(
-                    [e], self.filepath, scope=Scope.DANDISET
-                )
-            return []
+        current_version = get_schema_version()
+        if schema_version != current_version:
+            raise ValueError(
+                f"Unsupported schema version: {schema_version}; expected {current_version}"
+            )
+        try:
+            DandisetMeta(**meta)
+        except Exception as e:
+            if devel_debug:
+                raise
+            return _pydantic_errors_to_validation_results(
+                [e], self.filepath, scope=Scope.DANDISET
+            )
+        return []
 
     def as_readable(self) -> LocalReadableFile:
         """
@@ -362,11 +361,10 @@ class LocalFileAsset(LocalAsset):
                 },
             )
         except requests.HTTPError as e:
-            if e.response is not None and e.response.status_code == 409:
-                lgr.debug("%s: Blob already exists on server", asset_path)
-                blob_id = e.response.headers["Location"]
-            else:
+            if e.response is None or e.response.status_code != 409:
                 raise
+            lgr.debug("%s: Blob already exists on server", asset_path)
+            blob_id = e.response.headers["Location"]
         else:
             upload_id = resp["upload_id"]
             parts = resp["parts"]
@@ -747,10 +745,7 @@ def _pydantic_errors_to_validation_results(
     """Convert list of dict from pydantic into our custom object."""
     out = []
     errorlist: list
-    if isinstance(errors, ValidationError):
-        errorlist = errors.errors()
-    else:
-        errorlist = errors
+    errorlist = errors.errors() if isinstance(errors, ValidationError) else errors
     for e in errorlist:
         if isinstance(e, Exception):
             message = getattr(e, "message", str(e))

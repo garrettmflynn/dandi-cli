@@ -40,7 +40,7 @@ due.cite(
 
 def get_logger(name=None):
     """Return a logger to use"""
-    return logging.getLogger("dandi" + (".%s" % name if name else ""))
+    return logging.getLogger("dandi" + (f".{name}" if name else ""))
 
 
 def set_logger_level(lgr, level):
@@ -51,7 +51,7 @@ def set_logger_level(lgr, level):
     elif level.isalpha():
         level = getattr(logging, level)
     else:
-        lgr.warning("Do not know how to treat loglevel %s" % level)
+        lgr.warning(f"Do not know how to treat loglevel {level}")
         return
     lgr.setLevel(level)
 

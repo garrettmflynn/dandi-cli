@@ -31,9 +31,7 @@ lgr = get_logger()
 
 
 def naturalsize(v):
-    if v in ["", None]:
-        return ""
-    return humanize.naturalsize(v)
+    return "" if v == "" or v is None else humanize.naturalsize(v)
 
 
 def datefmt(v, fmt="%Y-%m-%d/%H:%M:%S"):
@@ -49,7 +47,9 @@ def datefmt(v, fmt="%Y-%m-%d/%H:%M:%S"):
 
 def summary_dates(values):
     return (
-        ["%s>" % datefmt(min(values)), "%s<" % datefmt(max(values))] if values else []
+        [f"{datefmt(min(values))}>", f"{datefmt(max(values))}<"]
+        if values
+        else []
     )
 
 

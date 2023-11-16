@@ -41,12 +41,7 @@ def test_reextract_metadata(
 
 
 def record_only_doi_requests(request):
-    if request.host in ("doi.org", "api.crossref.org"):
-        # We need to capture api.crossref.org requests as doi.org redirects
-        # there.
-        return request
-    else:
-        return None
+    return request if request.host in ("doi.org", "api.crossref.org") else None
 
 
 @pytest.mark.xfail(

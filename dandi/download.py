@@ -137,8 +137,9 @@ def download(
         raise ValueError(format)
 
     if sync:
-        to_delete = [p for dl in downloaders for p in dl.delete_for_sync()]
-        if to_delete:
+        if to_delete := [
+            p for dl in downloaders for p in dl.delete_for_sync()
+        ]:
             while True:
                 opt = abbrev_prompt(
                     f"Delete {pluralize(len(to_delete), 'local asset')}?",
@@ -401,9 +402,9 @@ class PYOUTHelper:
             if extra < 0:
                 lgr.debug("Extra size %d < 0 -- must not happen", extra)
             else:
-                extra_str = "+%s" % naturalsize(extra)
+                extra_str = f"+{naturalsize(extra)}"
                 if not self.it.finished:
-                    extra_str = ">" + extra_str
+                    extra_str = f">{extra_str}"
                 if self.items_summary.has_unknown_sizes:
                     extra_str += "+?"
                 v.append(extra_str)
@@ -439,7 +440,7 @@ class PYOUTHelper:
             if self.items_summary.has_unknown_sizes:
                 more_time_str += "+?"
             if more_time:
-                v.append("ETA: %s" % more_time_str)
+                v.append(f"ETA: {more_time_str}")
         return v
 
 
@@ -531,11 +532,6 @@ def _download_file(
         annex_path = op.join(toplevel_path, ".git", "annex")
         if existing == "error":
             raise FileExistsError(f"File {path!r} already exists")
-        elif existing == "skip":
-            yield _skip_file("already exists")
-            return
-        elif existing == "overwrite":
-            pass
         elif existing == "overwrite-different":
             realpath = op.realpath(path)
             key_parts = op.basename(realpath).split("-")
@@ -600,6 +596,9 @@ def _download_file(
                     return
                 lgr.debug(f"{path!r} - same attributes: {same}.  Redownloading")
 
+        elif existing == "skip":
+            yield _skip_file("already exists")
+            return
     if size is not None:
         yield {"size": size}
 
@@ -740,7 +739,7 @@ class DownloadDirectory:
         self.digests = digests
         #: The working directory in which downloaded data will be temporarily
         #: stored
-        self.dirpath = self.filepath.with_name(self.filepath.name + ".dandidownload")
+        self.dirpath = self.filepath.with_name(f"{self.filepath.name}.dandidownload")
         #: The file in `dirpath` to which data will be written as it is
         #: received
         self.writefile = self.dirpath / "file"
@@ -1027,14 +1026,13 @@ class ProgressCombiner:
             self.files[path].downloaded = status["done"]
             yield self.get_done()
         elif status.get("status") == "error":
+            out = {"message": self.message}
             if "checksum" in status:
                 self.files[path].state = DLState.CHECKSUM_ERROR
-                out = {"message": self.message}
                 self.set_status(out)
                 yield out
             else:
                 self.files[path].state = DLState.ERROR
-                out = {"message": self.message}
                 self.set_status(out)
                 yield out
                 sz = self.files[path].size

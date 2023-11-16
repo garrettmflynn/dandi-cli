@@ -100,11 +100,12 @@ from ..utils import on_windows as _on_windows
 
 
 def no_docker_commands():
-    missing_cmds = []
-    for cmd in ("docker", "docker-compose"):
-        if shutil.which(cmd) is None:
-            missing_cmds.append(cmd)
-    msg = "missing Docker commands: {}".format(", ".join(missing_cmds))
+    missing_cmds = [
+        cmd
+        for cmd in ("docker", "docker-compose")
+        if shutil.which(cmd) is None
+    ]
+    msg = f'missing Docker commands: {", ".join(missing_cmds)}'
     return msg, missing_cmds
 
 

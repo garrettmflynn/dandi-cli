@@ -61,7 +61,7 @@ class Digester:
         dict
           Keys are algorithm labels, and values are checksum strings
         """
-        lgr.debug("Estimating digests for %s" % fpath)
+        lgr.debug(f"Estimating digests for {fpath}")
         digests = [x() for x in self.digest_funcs]
         with open(fpath, "rb") as f:
             while True:

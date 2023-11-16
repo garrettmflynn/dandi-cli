@@ -678,7 +678,7 @@ def video_files(tmp_path: Path) -> list[tuple[Path, Path]]:
             fps=25,
             frameSize=(ny, nx),
         )
-        for k in range(nf):
+        for _ in range(nf):
             writer1.write(np.random.randint(0, 255, (nx, ny, 3)).astype("uint8"))
             writer2.write(np.random.randint(0, 255, (nx, ny, 3)).astype("uint8"))
         writer1.release()

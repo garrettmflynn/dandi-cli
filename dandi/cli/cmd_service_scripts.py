@@ -167,8 +167,7 @@ def update_dandiset_from_doi(
     Update the metadata for the draft version of a Dandiset with information
     from a given DOI record.
     """
-    if dandiset.startswith("DANDI:"):
-        dandiset = dandiset[6:]
+    dandiset = dandiset.removeprefix("DANDI:")
     start_time = datetime.now().astimezone()
     with DandiAPIClient.for_dandi_instance(dandi_instance, authenticate=True) as client:
         with RESTFullAPIClient(
@@ -359,8 +358,7 @@ def add_dict_to_list_field(
     if metadata.get(key) is None:
         metadata[key] = []
     assert isinstance(metadata[key], list)
-    matches = [item for item in metadata[key] if eqtest(newvalue, item)]  # type: ignore[arg-type]
-    if matches:
+    if matches := [item for item in metadata[key] if eqtest(newvalue, item)]:
         item = matches[0]
         item_yaml = indent(yaml_dump(item), " " * 4)
         if item == newvalue:
@@ -388,15 +386,16 @@ def add_dict_to_list_field(
                 "New value to add to Dandiset %s field:\n\n%s\n", key, newvalue_yaml
             )
             lgr.info("Replacing:\n\n%s\n", item_yaml)
-            if click.confirm(
-                f"Add value to Dandiset {key} field?", default=True, prompt_suffix=" "
+            if not click.confirm(
+                f"Add value to Dandiset {key} field?",
+                default=True,
+                prompt_suffix=" ",
             ):
-                lgr.info("Adding value to Dandiset %s field", key)
-                item.clear()
-                item.update(newvalue)
-                return True
-            else:
                 return False
+            lgr.info("Adding value to Dandiset %s field", key)
+            item.clear()
+            item.update(newvalue)
+            return True
     elif existing == "overwrite":
         lgr.info("Adding new value to Dandiset %s field:\n\n%s\n", key, newvalue_yaml)
         metadata[key].append(newvalue)
@@ -418,12 +417,12 @@ def add_dict_to_list_field(
 
 
 def eq_rel_resource(r1: dict[str, Any], r2: dict[str, Any]) -> bool:
-    return bool(r1["identifier"] == r2.get("identifier"))
+    return r1["identifier"] == r2.get("identifier")
 
 
 def eq_authors(author1: dict[str, Any], author2: dict[str, Any]) -> bool:
     orcid = author1.get("identifier")
     if orcid is not None:
-        return bool(orcid == author2.get("identifier"))
+        return orcid == author2.get("identifier")
     else:
-        return bool(author1["name"] == author2.get("name"))
+        return author1["name"] == author2.get("name")

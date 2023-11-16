@@ -42,7 +42,7 @@ def check_assets(
         if asset.path in remapping and remapping[asset.path] is None:
             # Asset was overwritten
             continue
-        if work_on in ("local", "both") and asset.path in remapping:
+        if work_on in {"local", "both"} and asset.path in remapping:
             assert not (sample_dandiset.dspath / asset.path).exists()
             remapped = remapping[asset.path]
             assert isinstance(remapped, str)
@@ -51,7 +51,7 @@ def check_assets(
             assert (
                 sample_dandiset.dspath / asset.path
             ).read_text() == f"{asset.path}\n"
-        if work_on in ("remote", "both") and asset.path in remapping:
+        if work_on in {"remote", "both"} and asset.path in remapping:
             remapped = remapping[asset.path]
             assert isinstance(remapped, str)
             with pytest.raises(NotFoundError):

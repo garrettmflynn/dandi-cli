@@ -67,9 +67,9 @@ def get_metadata(
     meta: dict[str, Any] = {}
 
     if isinstance(r, LocalReadableFile):
-        # Is the data BIDS (as defined by the presence of a BIDS dataset descriptor)
-        bids_dataset_description = find_bids_dataset_description(r.filepath)
-        if bids_dataset_description:
+        if bids_dataset_description := find_bids_dataset_description(
+            r.filepath
+        ):
             dandiset_path = find_parent_directory_containing(
                 "dandiset.yaml", r.filepath
             )
@@ -103,16 +103,11 @@ def get_metadata(
         # First read out possibly available versions of specifications for NWB(:N)
         meta["nwb_version"] = get_nwb_version(r)
 
-        # PyNWB might fail to load because of missing extensions.
-        # There is a new initiative of establishing registry of such extensions.
-        # Not yet sure if PyNWB is going to provide "native" support for needed
-        # functionality: https://github.com/NeurodataWithoutBorders/pynwb/issues/1143
-        # So meanwhile, hard-coded workaround for data types we care about
+        tried_imports = set()
         ndtypes_registry = {
             "AIBS_ecephys": "allensdk.brain_observatory.ecephys.nwb",
             "ndx-labmetadata-abf": "ndx_dandi_icephys",
         }
-        tried_imports = set()
         while True:
             try:
                 meta.update(_get_pynwb_metadata(r))
@@ -125,15 +120,13 @@ def get_metadata(
                 ndtype = res.groups()[0]
                 if ndtype not in ndtypes_registry:
                     raise ValueError(
-                        "We do not know which extension provides %s. "
-                        "Original exception was: %s. " % (ndtype, exc)
+                        f"We do not know which extension provides {ndtype}. Original exception was: {exc}. "
                     )
                 import_mod = ndtypes_registry[ndtype]
                 lgr.debug("Importing %r which should provide %r", import_mod, ndtype)
                 if import_mod in tried_imports:
                     raise RuntimeError(
-                        "We already tried importing %s to provide %s, but it seems it didn't help"
-                        % (import_mod, ndtype)
+                        f"We already tried importing {import_mod} to provide {ndtype}, but it seems it didn't help"
                     )
                 tried_imports.add(import_mod)
                 __import__(import_mod)
@@ -154,26 +147,24 @@ def _parse_iso8601(age: str) -> list[str]:
         r"^P(?!$)(\d+(?:\.\d+)?Y)?(\d+(?:\.\d+)?M)?(\d+(?:\.\d+)?W)?(\d+(?:\.\d+)?D)?"
         r"(T(?=\d)(\d+(?:\.\d+)?H)?(\d+(?:\.\d+)?M)?(\d+(?:\.\d+)?S)?)?$"
     )
-    m = re.match(pattern, age, flags=re.I)
-    if m:
-        age_f = ["P"] + [m[i] for i in range(1, 6) if m[i]]
-        # expanding the Time part (todo: can be done already in pattern)
-        if "T" in age_f[-1]:
-            mT = re.match(
-                r"^T(\d+(?:\.\d+)?H)?(\d+(?:\.\d+)?M)?(\d+(?:\.\d+)?S)?",
-                age_f[-1],
-                flags=re.I,
-            )
-            if mT is None:
-                raise ValueError(
-                    f"Failed to parse the trailing part of age {age_f[-1]!r}"
-                )
-            age_f = age_f[:-1] + ["T"] + [mT[i] for i in range(1, 3) if mT[i]]
-        # checking if there are decimal parts in the higher order components
-        _check_decimal_parts(age_f)
-        return age_f
-    else:
+    if not (m := re.match(pattern, age, flags=re.I)):
         raise ValueError(f"ISO 8601 expected, but {age!r} was received")
+    age_f = ["P"] + [m[i] for i in range(1, 6) if m[i]]
+    # expanding the Time part (todo: can be done already in pattern)
+    if "T" in age_f[-1]:
+        mT = re.match(
+            r"^T(\d+(?:\.\d+)?H)?(\d+(?:\.\d+)?M)?(\d+(?:\.\d+)?S)?",
+            age_f[-1],
+            flags=re.I,
+        )
+        if mT is None:
+            raise ValueError(
+                f"Failed to parse the trailing part of age {age_f[-1]!r}"
+            )
+        age_f = age_f[:-1] + ["T"] + [mT[i] for i in range(1, 3) if mT[i]]
+    # checking if there are decimal parts in the higher order components
+    _check_decimal_parts(age_f)
+    return age_f
 
 
 def _parse_age_re(age: str, unit: str, tp: str = "date") -> tuple[str, str | None]:
@@ -201,12 +192,12 @@ def _parse_age_re(age: str, unit: str, tp: str = "date") -> tuple[str, str | Non
     if m is None:
         # checking pattern with "unit" word
         m = re.match(rf"(\d+\.?\d*)\s*units?:?\s*({pat_un}s?)", age, flags=re.I)
-        if m is None:
-            # checking pattern with swapped order
-            m = re.match(rf"({pat_un}s?)\s*(\d+\.?\d*)", age, flags=re.I)
-            swap_flag = True
-            if m is None:
-                return age, None
+    if m is None:
+        # checking pattern with swapped order
+        m = re.match(rf"({pat_un}s?)\s*(\d+\.?\d*)", age, flags=re.I)
+        swap_flag = True
+    if m is None:
+        return age, None
     qty = m[3 if swap_flag else 1]
     if "." in qty:
         qty = float(qty)
@@ -219,8 +210,7 @@ def _parse_age_re(age: str, unit: str, tp: str = "date") -> tuple[str, str | Non
 
 def _parse_hours_format(age: str) -> tuple[str, list[str]]:
     """parsing format 0:30:10"""
-    m = re.match(r"\s*(\d\d?):(\d\d):(\d\d)", age)
-    if m:
+    if m := re.match(r"\s*(\d\d?):(\d\d):(\d\d)", age):
         time_part = ["T", f"{int(m[1])}H", f"{int(m[2])}M", f"{int(m[3])}S"]
         return (age[: m.start()] + age[m.end() :]).strip(), time_part
     else:
@@ -416,39 +406,36 @@ def timedelta2duration(delta: timedelta) -> str:
 
 def extract_sex(metadata: dict) -> models.SexType | None:
     value = metadata.get("sex", None)
-    if value is not None and value != "":
-        value = value.lower()
-        if value in ["m", "male"]:
-            value_id = "http://purl.obolibrary.org/obo/PATO_0000384"
-            value = "Male"
-        elif value in ["f", "female"]:
-            value_id = "http://purl.obolibrary.org/obo/PATO_0000383"
-            value = "Female"
-        elif value in ["unknown", "u"]:
-            value_id = None
-            value = "Unknown"
-        elif value in ["other", "o"]:
-            value_id = None
-            value = "Other"
-        elif value.startswith("http"):
-            value_id = value
-            value = None
-        else:
-            raise ValueError(f"Cannot interpret sex field: {value}")
-        return models.SexType(identifier=value_id, name=value)
-    else:
+    if value is None or value == "":
         return None
+    value = value.lower()
+    if value in ["m", "male"]:
+        value_id = "http://purl.obolibrary.org/obo/PATO_0000384"
+        value = "Male"
+    elif value in ["f", "female"]:
+        value_id = "http://purl.obolibrary.org/obo/PATO_0000383"
+        value = "Female"
+    elif value in ["unknown", "u"]:
+        value_id = None
+        value = "Unknown"
+    elif value in ["other", "o"]:
+        value_id = None
+        value = "Other"
+    elif value.startswith("http"):
+        value_id = value
+        value = None
+    else:
+        raise ValueError(f"Cannot interpret sex field: {value}")
+    return models.SexType(identifier=value_id, name=value)
 
 
 def extract_strain(metadata: dict) -> models.StrainType | None:
-    value = metadata.get("strain", None)
-    if value:
-        # Don't assign cell lines to strain
-        if value.lower().startswith("cellline:"):
-            return None
-        return models.StrainType(name=value)
-    else:
+    if not (value := metadata.get("strain", None)):
         return None
+    # Don't assign cell lines to strain
+    if value.lower().startswith("cellline:"):
+        return None
+    return models.StrainType(name=value)
 
 
 def extract_cellLine(metadata: dict) -> str | None:
@@ -559,8 +546,7 @@ def parse_purlobourl(
     if lookup is None:
         lookup = ("rdfs:label", "oboInOwl:hasExactSynonym")
     for key in lookup:
-        elchild = elfound.getElementsByTagName(key)
-        if elchild:
+        if elchild := elfound.getElementsByTagName(key):
             elchild0 = elchild[0]
             values[key] = elchild0.childNodes[0].nodeValue.capitalize()
     return values
@@ -569,51 +555,52 @@ def parse_purlobourl(
 def extract_species(metadata: dict) -> models.SpeciesType | None:
     value_orig = metadata.get("species", None)
     value_id = None
-    if value_orig is not None and value_orig != "":
-        value = value_orig.lower().rstrip("/")
-        if value.startswith("http://purl.obolibrary.org/obo/NCBITaxon_".lower()):
-            for common_names, prefix, uri, name in species_map:
-                if value.split("//")[1] == uri.lower().rstrip("/").split("//")[1]:
-                    value_id = uri
-                    value = name
-                    break
-            if value_id is None:
-                value_id = value_orig
-                lookup = ("rdfs:label", "oboInOwl:hasExactSynonym")
-                try:
-                    result: dict[str, str] | None = parse_purlobourl(
-                        value_orig, lookup=lookup
-                    )
-                except ConnectionError:
-                    value = None
-                else:
-                    value = None
-                    if result is not None:
-                        value = " - ".join(
-                            [result[key] for key in lookup if key in result]
-                        )
-        else:
-            for common_names, prefix, uri, name in species_map:
-                if any(key in value for key in common_names) or (
-                    prefix and value.startswith(prefix)
-                ):
-                    value_id = uri
-                    value = name
-                    break
-        if value_id is None:
-            raise ValueError(
-                f"Cannot interpret species field: {value}. Please "
-                "contact help@dandiarchive.org to add your species. "
-                "You can also put the entire url from NCBITaxon "
-                "(http://www.ontobee.org/ontology/NCBITaxon) into "
-                "your species field in your NWB file. For example: "
-                "http://purl.obolibrary.org/obo/NCBITaxon_9606 is the "
-                "url for the species Homo sapiens. Please note that "
-                "this url is case sensitive."
-            )
-        return models.SpeciesType(identifier=value_id, name=value)
-    else:
+    if value_orig is None or value_orig == "":
         return None
+    value = value_orig.lower().rstrip("/")
+    if value.startswith("http://purl.obolibrary.org/obo/NCBITaxon_".lower()):
+        for common_names, prefix, uri, name in species_map:
+            if value.split("//")[1] == uri.lower().rstrip("/").split("//")[1]:
+                value_id = uri
+                value = name
+                break
+        if value_id is None:
+            value_id = value_orig
+            lookup = ("rdfs:label", "oboInOwl:hasExactSynonym")
+            try:
+                result: dict[str, str] | None = parse_purlobourl(
+                    value_orig, lookup=lookup
+                )
+            except ConnectionError:
+                value = None
+            else:
+                value = (
+                    " - ".join(
+                        [result[key] for key in lookup if key in result]
+                    )
+                    if result is not None
+                    else None
+                )
+    else:
+        for common_names, prefix, uri, name in species_map:
+            if any(key in value for key in common_names) or (
+                prefix and value.startswith(prefix)
+            ):
+                value_id = uri
+                value = name
+                break
+    if value_id is None:
+        raise ValueError(
+            f"Cannot interpret species field: {value}. Please "
+            "contact help@dandiarchive.org to add your species. "
+            "You can also put the entire url from NCBITaxon "
+            "(http://www.ontobee.org/ontology/NCBITaxon) into "
+            "your species field in your NWB file. For example: "
+            "http://purl.obolibrary.org/obo/NCBITaxon_9606 is the "
+            "url for the species Homo sapiens. Please note that "
+            "this url is case sensitive."
+        )
+    return models.SpeciesType(identifier=value_id, name=value)
 
 
 def extract_assay_type(metadata: dict) -> list[models.AssayType] | None:
@@ -997,15 +984,9 @@ def add_common_metadata(
     Update a `dict` of raw "schemadata" with the fields that are common to both
     NWB assets and non-NWB assets
     """
-    if digest is not None:
-        metadata.digest = digest.asdict()
-    else:
-        metadata.digest = {}
+    metadata.digest = digest.asdict() if digest is not None else {}
     metadata.dateModified = get_utcnow_datetime()
-    if isinstance(path, Readable):
-        r = path
-    else:
-        r = LocalReadableFile(path)
+    r = path if isinstance(path, Readable) else LocalReadableFile(path)
     mtime = r.get_mtime()
     if mtime is not None:
         metadata.blobDateModified = mtime
@@ -1013,10 +994,10 @@ def add_common_metadata(
             lgr.warning("mtime %s of %s is in the future", mtime, r)
     size = r.get_size()
     if digest is not None and digest.algorithm is models.DigestType.dandi_zarr_checksum:
-        m = re.fullmatch(
-            r"(?P<hash>[0-9a-f]{32})-(?P<files>[0-9]+)--(?P<size>[0-9]+)", digest.value
-        )
-        if m:
+        if m := re.fullmatch(
+            r"(?P<hash>[0-9a-f]{32})-(?P<files>[0-9]+)--(?P<size>[0-9]+)",
+            digest.value,
+        ):
             size = int(m["size"])
     metadata.contentSize = parse_obj_as(ByteSize, size)
     if metadata.wasGeneratedBy is None:

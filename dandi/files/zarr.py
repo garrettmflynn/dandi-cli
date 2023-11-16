@@ -248,10 +248,7 @@ class ZarrAsset(LocalDirectoryAsset[LocalZarrEntry]):
         )
 
     def _is_too_deep(self) -> bool:
-        for e in self.iterfiles():
-            if len(e.parts) >= MAX_ZARR_DEPTH + 1:
-                return True
-        return False
+        return any(len(e.parts) >= MAX_ZARR_DEPTH + 1 for e in self.iterfiles())
 
     def iter_upload(
         self,
@@ -378,7 +375,7 @@ class ZarrAsset(LocalDirectoryAsset[LocalZarrEntry]):
                                     to_delete.append(old_zarr_entries.pop(pps))
                                     break
                             else:
-                                eprefix = str(local_entry) + "/"
+                                eprefix = f"{str(local_entry)}/"
                                 sub_e = [
                                     (k, v)
                                     for k, v in old_zarr_entries.items()

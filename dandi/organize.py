@@ -88,8 +88,7 @@ def create_unique_filenames_from_metadata(
 
     # sanity check -- should all be known
     if required_fields:
-        unknown = set(required_fields).difference(dandi_layout_fields)
-        if unknown:
+        if unknown := set(required_fields).difference(dandi_layout_fields):
             raise ValueError(
                 f"Unknown fields provided as required_fields: {', '.join(unknown)}."
                 f"  Known fields are: {', '.join(dandi_layout_fields)}"
@@ -122,8 +121,7 @@ def create_unique_filenames_from_metadata(
         r["extension"] = op.splitext(r["path"])[1]
         # since those might be used in dandi_path
         for field in "subject_id", "session_id":
-            value = r.get(field, None)
-            if value:
+            if value := r.get(field, None):
                 r[field] = _sanitize_value(value, field)
 
         # _required_if_not_empty is used in addition to "type" required by
@@ -141,7 +139,7 @@ def create_unique_filenames_from_metadata(
         # Consider additional fields which might provide disambiguation
         # but which we otherwise do not include ATM
         for field, field_rec in dandi_layout_fields.items():
-            if not field_rec.get("type") == "disambiguation":
+            if field_rec.get("type") != "disambiguation":
                 continue
             additional_nonunique.append(field)
             if field == "obj_id":  # yet to be computed
@@ -154,11 +152,9 @@ def create_unique_filenames_from_metadata(
             # needs disambiguation.
             # Cconsider conflicting groups and adjust their records
             for conflicting_path, paths in non_unique.items():
-                # I think it might not work out entirely correctly if we have multiple
-                # instances of non-unique, but then will consider not within each group...
-                # yoh: TODO
-                values = _get_unique_values_among_non_unique(metadata, paths, field)
-                if values:  # helps disambiguation, but might still be non-unique
+                if values := _get_unique_values_among_non_unique(
+                    metadata, paths, field
+                ):
                     # add to all files in the group
                     for r in metadata:
                         if r["dandi_path"] == conflicting_path:
@@ -274,27 +270,22 @@ def organize_external_files(
 def _assign_obj_id(metadata, non_unique):
     msg = "%d out of %d paths are not unique" % (len(non_unique), len(metadata))
 
-    lgr.info(msg + ". We will try adding _obj- based on crc32 of object_id")
-    seen_obj_ids = {}  # obj_id: object_id
+    lgr.info(f"{msg}. We will try adding _obj- based on crc32 of object_id")
     seen_object_ids = {}  # object_id: path
     recent_nwb_msg = "NWB>=2.1.0 standard (supported by pynwb>=1.1.0)."
+    seen_obj_ids = {}
     for r in metadata:
         if r["dandi_path"] in non_unique:
             try:
                 object_id = get_object_id(r["path"])
             except KeyError:
                 raise OrganizeImpossibleError(
-                    msg
-                    + f". We tried to use object_id but it is absent in {r['path']!r}. "
-                    f"It is either not .nwb file or produced by older *nwb libraries. "
-                    f"You must re-save files e.g. using {recent_nwb_msg}"
+                    f"{msg}. We tried to use object_id but it is absent in {r['path']!r}. It is either not .nwb file or produced by older *nwb libraries. You must re-save files e.g. using {recent_nwb_msg}"
                 )
 
             if not object_id:
                 raise OrganizeImpossibleError(
-                    msg
-                    + f". We tried to use object_id but it was {object_id!r} for {r['path']!r}. "
-                    f"You might need to re-save files using {recent_nwb_msg}"
+                    f"{msg}. We tried to use object_id but it was {object_id!r} for {r['path']!r}. You might need to re-save files using {recent_nwb_msg}"
                 )
             # shorter version
             obj_id = get_obj_id(object_id)
@@ -322,10 +313,7 @@ def _assign_obj_id(metadata, non_unique):
 
 def _get_hashable(v):
     """if a list - would cast to tuple"""
-    if isinstance(v, list):
-        return tuple(v)
-    else:
-        return v
+    return tuple(v) if isinstance(v, list) else v
 
 
 def _get_unique_values_among_non_unique(metadata, non_unique_paths, field):
@@ -411,8 +399,7 @@ def _populate_modalities(metadata):
         for nd_rec in nd_types:
             # split away the count
             ndtype = nd_rec.split()[0]
-            mod = ndtypes_to_modalities.get(ndtype, None)
-            if mod:
+            if mod := ndtypes_to_modalities.get(ndtype, None):
                 if mod not in ("base", "device", "file", "misc"):
                     # skip some trivial/generic ones
                     mods.add(mod)
@@ -634,8 +621,8 @@ def populate_dataset_yml(filepath, metadata):
             rec["publications"] = []
         # TODO: better harmonization
         strip_regex = "[- \t'\"]"
-        v = re.sub("^" + strip_regex, "", v)
-        v = re.sub(strip_regex + "$", "", v)
+        v = re.sub(f"^{strip_regex}", "", v)
+        v = re.sub(f"{strip_regex}$", "", v)
         if v not in rec["publications"]:
             rec["publications"].append(v)
 
@@ -664,15 +651,12 @@ def _get_non_unique_paths(metadata):
     all_paths = [m["dandi_path"] for m in metadata]
     all_paths_unique = set(all_paths)
     non_unique = {}
-    if not len(all_paths) == len(all_paths_unique):
+    if len(all_paths) != len(all_paths_unique):
         counts = Counter(all_paths)
         non_unique = {p: c for p, c in counts.items() if c > 1}
         # Let's prepare informative listing
         for p in non_unique:
-            orig_paths = []
-            for e in metadata:
-                if e["dandi_path"] == p:
-                    orig_paths.append(e["path"])
+            orig_paths = [e["path"] for e in metadata if e["dandi_path"] == p]
             non_unique[p] = orig_paths  # overload with the list instead of count
     return non_unique
 
@@ -686,24 +670,23 @@ def detect_link_type(srcfile, destdir):
     """
     destfile = Path(destdir, f".dandi.{os.getpid()}.dest")
     try:
+        os.symlink(srcfile, destfile)
+    except OSError:
         try:
-            os.symlink(srcfile, destfile)
+            os.link(srcfile, destfile)
         except OSError:
-            try:
-                os.link(srcfile, destfile)
-            except OSError:
-                lgr.info(
-                    "Symlink and hardlink tests both failed; setting files_mode='copy'"
-                )
-                return "copy"
-            else:
-                lgr.info(
-                    "Hard link support autodetected; setting files_mode='hardlink'"
-                )
-                return "hardlink"
+            lgr.info(
+                "Symlink and hardlink tests both failed; setting files_mode='copy'"
+            )
+            return "copy"
         else:
-            lgr.info("Symlink support autodetected; setting files_mode='symlink'")
-            return "symlink"
+            lgr.info(
+                "Hard link support autodetected; setting files_mode='hardlink'"
+            )
+            return "hardlink"
+    else:
+        lgr.info("Symlink support autodetected; setting files_mode='symlink'")
+        return "symlink"
     finally:
         try:
             destfile.unlink()
@@ -847,7 +830,7 @@ def organize(
         if invalid == "fail":
             raise ValueError(msg)
         elif invalid == "warn":
-            lgr.warning(msg + " They will be skipped")
+            lgr.warning(f"{msg} They will be skipped")
         else:
             raise ValueError(f"invalid has an invalid value {invalid}")
 
@@ -912,15 +895,14 @@ def organize(
         dandi_fullpath = op.join(dandiset_path, e["dandi_path"])
         if op.lexists(dandi_fullpath):
             # It might be the same file, then we would not complain
-            if not (
-                op.realpath(e["path"])
-                == op.realpath(op.join(dandiset_path, e["dandi_path"]))
+            if op.realpath(e["path"]) != op.realpath(
+                op.join(dandiset_path, e["dandi_path"])
             ):
                 existing.append(dandi_fullpath)
-            # TODO: it might happen that with "move" we are renaming files
-            # so there is an existing, which also gets moved away "first"
-            # May be we should RF so the actual loop below would be first done
-            # "dry", collect info on what is actually to be done, and then we would complain here
+                    # TODO: it might happen that with "move" we are renaming files
+                    # so there is an existing, which also gets moved away "first"
+                    # May be we should RF so the actual loop below would be first done
+                    # "dry", collect info on what is actually to be done, and then we would complain here
     if existing:
         raise AssertionError(
             "%d paths already exist: %s%s.  Remove them first."
@@ -1017,9 +999,7 @@ def organize(
             n = len(n)
         if cond is None:
             cond = bool(n)
-        if not cond:
-            return ""
-        return msg % n
+        return "" if not cond else msg % n
 
     lgr.info(
         "Organized %d%s paths%s.%s Visit %s/",

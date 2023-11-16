@@ -151,7 +151,7 @@ def test_organize_nwb_test_data(
     else:
         hardlinks_work = True
 
-    if mode in ("simulate", "symlink") and not symlinks_work:
+    if mode in {"simulate", "symlink"} and not symlinks_work:
         pytest.skip("Symlinks not supported")
     elif mode == "hardlink" and not hardlinks_work:
         pytest.skip("Hard links not supported")
@@ -183,7 +183,7 @@ def test_organize_nwb_test_data(
     produced_nwb_paths = sorted(find_files(r"\.nwb\Z", paths=outdir))
     produced_relpaths = [op.relpath(p, outdir) for p in produced_paths]
     if mode == "dry":
-        assert produced_relpaths == []
+        assert not produced_relpaths
     else:
         assert produced_relpaths == [
             op.join("sub-RAT123", "sub-RAT123.nwb"),

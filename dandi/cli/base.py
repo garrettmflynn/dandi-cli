@@ -14,16 +14,15 @@ class IntColonInt(click.ParamType):
     name = "int:int"
 
     def convert(self, value, param, ctx):
-        if isinstance(value, str):
-            v1, colon, v2 = value.partition(":")
-            try:
-                v1 = int(v1)
-                v2 = int(v2) if colon else None
-            except ValueError:
-                self.fail("Value must be of the form `N[:M]`", param, ctx)
-            return (v1, v2)
-        else:
+        if not isinstance(value, str):
             return value
+        v1, colon, v2 = value.partition(":")
+        try:
+            v1 = int(v1)
+            v2 = int(v2) if colon else None
+        except ValueError:
+            self.fail("Value must be of the form `N[:M]`", param, ctx)
+        return (v1, v2)
 
     def get_metavar(self, param):
         return "N[:M]"

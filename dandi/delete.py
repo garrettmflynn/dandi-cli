@@ -55,7 +55,7 @@ class Deleter:
     def add_asset(self, asset: RemoteAsset) -> None:
         # Ensure the list is free of duplicates so that we don't try to delete
         # the same asset twice
-        if not any(a.identifier == asset.identifier for a in self.remote_assets):
+        if all(a.identifier != asset.identifier for a in self.remote_assets):
             self.remote_assets.append(asset)
 
     def register_dandiset(self, instance: DandiInstance, dandiset_id: str) -> None:

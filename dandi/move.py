@@ -235,19 +235,19 @@ class LocalizedMover(Mover):
         moves: dict[AssetPath, AssetPath] = {}
         for s in map(self.get_path, srcs):
             if destobj is None:
-                if isinstance(s, File):
-                    destobj = File(destpath)
-                else:
-                    destobj = Folder(destpath, [])
+                destobj = File(destpath) if isinstance(s, File) else Folder(destpath, [])
             if isinstance(s, File):
-                if isinstance(destobj, File):
-                    pdest = AssetPath(destobj.path)
-                else:
-                    pdest = AssetPath(
+                pdest = (
+                    AssetPath(destobj.path)
+                    if isinstance(destobj, File)
+                    else AssetPath(
                         posixpath.normpath(
-                            posixpath.join(destobj.path, posixpath.basename(s.path))
+                            posixpath.join(
+                                destobj.path, posixpath.basename(s.path)
+                            )
                         )
                     )
+                )
                 if s.path == pdest:
                     lgr.debug(
                         "Would move %s asset %r to itself; ignoring",
@@ -262,26 +262,25 @@ class LocalizedMover(Mover):
                         s.path,
                         pdest,
                     )
+            elif isinstance(destobj, File):
+                raise ValueError(f"Cannot move folder {s.path!r} to a file path")
             else:
-                if isinstance(destobj, File):
-                    raise ValueError(f"Cannot move folder {s.path!r} to a file path")
-                else:
-                    for p in s.relcontents:
-                        p1 = posixpath.normpath(posixpath.join(s.path, p))
-                        p2 = posixpath.normpath(
-                            posixpath.join(destobj.path, posixpath.basename(s.path), p)
-                        )
-                        if p1 == p2:
-                            lgr.debug(
-                                "Would move %s asset %r to itself; ignoring",
-                                self.placename,
-                                p1,
-                            )
-                            continue
-                        moves[AssetPath(p1)] = AssetPath(p2)
+                for p in s.relcontents:
+                    p1 = posixpath.normpath(posixpath.join(s.path, p))
+                    p2 = posixpath.normpath(
+                        posixpath.join(destobj.path, posixpath.basename(s.path), p)
+                    )
+                    if p1 == p2:
                         lgr.debug(
-                            "Calculated %s move: %r -> %r", self.placename, p1, p2
+                            "Would move %s asset %r to itself; ignoring",
+                            self.placename,
+                            p1,
                         )
+                        continue
+                    moves[AssetPath(p1)] = AssetPath(p2)
+                    lgr.debug(
+                        "Calculated %s move: %r -> %r", self.placename, p1, p2
+                    )
         return self.compile_moves(moves, existing)
 
     def calculate_moves_by_regex(
@@ -296,8 +295,7 @@ class LocalizedMover(Mover):
         rev: dict[AssetPath, AssetPath] = {}
         any_matched = False
         for asset_path, relpath in self.get_assets(subpath_only=True):
-            m = rgx.search(relpath)
-            if m:
+            if m := rgx.search(relpath):
                 any_matched = True
                 dest, _ = self.resolve(
                     relpath[: m.start()] + m.expand(replace) + relpath[m.end() :]

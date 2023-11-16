@@ -124,7 +124,7 @@ def ls(
         if unknown_fields:
             display_known_fields(all_fields)
             raise click.UsageError(
-                "Following fields are not known: %s" % ", ".join(unknown_fields)
+                f'Following fields are not known: {", ".join(unknown_fields)}'
             )
 
     urls = map(is_url, paths)
@@ -173,7 +173,7 @@ def ls(
     elif format == "yaml":
         out = YAMLFormatter()
     else:
-        raise NotImplementedError("Unknown format %s" % format)
+        raise NotImplementedError(f"Unknown format {format}")
 
     async_keys = set(all_fields)
     if fields is not None:
@@ -254,9 +254,9 @@ def display_known_fields(all_fields):
     # Display all known fields
     click.secho("Known fields:")
     for field in all_fields:
-        s = "- " + field
+        s = f"- {field}"
         if field in PYOUT_SHORT_NAMES:
-            s += " or %s" % PYOUT_SHORT_NAMES[field]
+            s += f" or {PYOUT_SHORT_NAMES[field]}"
         click.secho(s)
     return
 
@@ -317,14 +317,7 @@ def flatten_meta_to_pyout(meta):
     ----------
     meta: dict
     """
-    out = {}
-
-    # normalize some fields and remove completely empty
-    for f, v in (meta or dict()).items():
-        if not v:
-            continue
-        out[f] = flatten_v(v)
-    return out
+    return {f: flatten_v(v) for f, v in (meta or dict()).items() if v}
 
 
 def get_metadata_ls(

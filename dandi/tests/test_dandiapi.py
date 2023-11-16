@@ -680,7 +680,7 @@ def test_empty_zarr_iterfiles(new_dandiset: SampleDandiset) -> None:
     )
     a = RemoteAsset.from_data(new_dandiset.dandiset, r)
     assert isinstance(a, RemoteZarrAsset)
-    assert list(a.iterfiles()) == []
+    assert not list(a.iterfiles())
 
 
 def test_get_many_pages_of_assets(

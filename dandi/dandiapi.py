@@ -274,10 +274,7 @@ class RESTFullAPIClient:
                 raise requests.HTTPError(msg, response=result)
 
         if json_resp:
-            if result.text.strip():
-                return result.json()
-            else:
-                return None
+            return result.json() if result.text.strip() else None
         else:
             return result
 
@@ -363,13 +360,12 @@ class RESTFullAPIClient:
                         f"API server changed pagination strategy: {page1} URL"
                         f" is now followed by {r['next']}"
                     )
-                else:
-                    while True:
-                        yield from r["results"]
-                        if r.get("next"):
-                            r = self.get(r["next"])
-                        else:
-                            return
+                while True:
+                    yield from r["results"]
+                    if r.get("next"):
+                        r = self.get(r["next"])
+                    else:
+                        return
         yield from r["results"]
         if r["next"] is None:
             return
@@ -542,19 +538,19 @@ class DandiAPIClient(RESTFullAPIClient):
         """
         if lazy:
             return RemoteDandiset(self, dandiset_id, version_id)
-        else:
-            try:
-                d = RemoteDandiset.from_data(
-                    self, self.get(f"/dandisets/{dandiset_id}/")
-                )
-            except HTTP404Error:
-                raise NotFoundError(f"No such Dandiset: {dandiset_id!r}")
-            if version_id is not None and version_id != d.version_id:
-                if version_id == DRAFT:
-                    return d.for_version(d.draft_version)
-                else:
-                    return d.for_version(version_id)
-            return d
+        try:
+            d = RemoteDandiset.from_data(
+                self, self.get(f"/dandisets/{dandiset_id}/")
+            )
+        except HTTP404Error:
+            raise NotFoundError(f"No such Dandiset: {dandiset_id!r}")
+        if version_id is not None and version_id != d.version_id:
+            return (
+                d.for_version(d.draft_version)
+                if version_id == DRAFT
+                else d.for_version(version_id)
+            )
+        return d
 
     def get_dandisets(self) -> Iterator[RemoteDandiset]:
         """
@@ -750,10 +746,7 @@ class RemoteDandiset:
             self._version_id = version.identifier
             self._version = version
         self._data: RemoteDandisetData | None
-        if data is not None:
-            self._data = RemoteDandisetData.parse_obj(data)
-        else:
-            self._data = None
+        self._data = RemoteDandisetData.parse_obj(data) if data is not None else None
 
     def __str__(self) -> str:
         return f"{self.client._instance_id}:{self.identifier}/{self.version_id}"
@@ -1351,13 +1344,12 @@ class BaseRemoteAsset(ABC, APIBase):
         """Fetch the metadata for the asset as an unprocessed `dict`"""
         if self._metadata is not None:
             return self._metadata
-        else:
-            try:
-                data = self.client.get(self.api_path)
-                assert isinstance(data, dict)
-                return data
-            except HTTP404Error:
-                raise NotFoundError(f"No such asset: {self}")
+        try:
+            data = self.client.get(self.api_path)
+            assert isinstance(data, dict)
+            return data
+        except HTTP404Error:
+            raise NotFoundError(f"No such asset: {self}")
 
     def get_raw_digest(self, digest_type: str | models.DigestType | None = None) -> str:
         """
@@ -1847,10 +1839,7 @@ class RemoteZarrEntry:
     def suffix(self) -> str:
         """The final file extension of the basename, if any"""
         i = self.name.rfind(".")
-        if 0 < i < len(self.name) - 1:
-            return self.name[i:]
-        else:
-            return ""
+        return self.name[i:] if 0 < i < len(self.name) - 1 else ""
 
     @property
     def suffixes(self) -> list[str]:
@@ -1858,30 +1847,29 @@ class RemoteZarrEntry:
         if self.name.endswith("."):
             return []
         name = self.name.lstrip(".")
-        return ["." + suffix for suffix in name.split(".")[1:]]
+        return [f".{suffix}" for suffix in name.split(".")[1:]]
 
     @property
     def stem(self) -> str:
         """The basename without its final file extension, if any"""
         i = self.name.rfind(".")
-        if 0 < i < len(self.name) - 1:
-            return self.name[:i]
-        else:
-            return self.name
+        return self.name[:i] if 0 < i < len(self.name) - 1 else self.name
 
     def match(self, pattern: str) -> bool:
         """Tests whether the path matches the given glob pattern"""
         if pattern.startswith("/"):
             raise ValueError(f"Absolute paths not allowed: {pattern!r}")
-        patparts = tuple(q for q in pattern.split("/") if q)
-        if not patparts:
+        if patparts := tuple(q for q in pattern.split("/") if q):
+            return (
+                False
+                if len(patparts) > len(self.parts)
+                else all(
+                    fnmatchcase(part, pat)
+                    for part, pat in zip(reversed(self.parts), reversed(patparts))
+                )
+            )
+        else:
             raise ValueError("Empty pattern")
-        if len(patparts) > len(self.parts):
-            return False
-        for part, pat in zip(reversed(self.parts), reversed(patparts)):
-            if not fnmatchcase(part, pat):
-                return False
-        return True
 
     def get_download_file_iter(
         self, chunk_size: int = MAX_CHUNK_SIZE

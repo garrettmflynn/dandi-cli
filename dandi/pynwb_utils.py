@@ -165,8 +165,7 @@ def get_neurodata_types_to_modalities_map() -> dict[str, str]:
                     if ndtypes[ndtype] == modality:
                         continue  # all good, just already known
                     raise RuntimeError(
-                        "We already have %s pointing to %s, but now got %s"
-                        % (ndtype, ndtypes[ndtype], modality)
+                        f"We already have {ndtype} pointing to {ndtypes[ndtype]}, but now got {modality}"
                     )
                 ndtypes[ndtype] = modality
 
@@ -204,9 +203,9 @@ def _scan_neurodata_types(grp: h5py.File) -> list[tuple[Any, Any]]:
 
 def _get_pynwb_metadata(path: str | Path | Readable) -> dict[str, Any]:
     out = {}
-    with open_readable(path) as fp, h5py.File(fp, "r") as h5, NWBHDF5IO(
-        file=h5, load_namespaces=True
-    ) as io:
+    with (open_readable(path) as fp, h5py.File(fp, "r") as h5, NWBHDF5IO(
+            file=h5, load_namespaces=True
+        ) as io):
         nwb = io.read()
         for key in metadata_nwb_file_fields:
             value = getattr(nwb, key)
@@ -223,22 +222,15 @@ def _get_pynwb_metadata(path: str | Path | Readable) -> dict[str, Any]:
         # .subject can be None as the test shows
         for subject_feature in metadata_nwb_subject_fields:
             out[subject_feature] = getattr(nwb.subject, subject_feature, None)
-        # Add a few additional useful fields
-
-        # "Custom" DANDI extension by Ben for now to contain additional metadata
-        # not present in nwb-schema
-        dandi_icephys = getattr(nwb, "lab_meta_data", {}).get(
+        if dandi_icephys := getattr(nwb, "lab_meta_data", {}).get(
             "DandiIcephysMetadata", None
-        )
-        if dandi_icephys:
+        ):
             out.update(dandi_icephys.fields)
-        # Go through devices and see if there any probes used to record this file
-        probe_ids = [
+        if probe_ids := [
             v.probe_id.item()  # .item to avoid numpy types
             for v in getattr(nwb, "devices", {}).values()
             if hasattr(v, "probe_id")  # duck typing
-        ]
-        if probe_ids:
+        ]:
             out["probe_ids"] = probe_ids
 
         # Counts
@@ -308,7 +300,10 @@ def rename_nwb_external_files(metadata: list[dict], dandiset_path: str) -> None:
         base path of dandiset
     """
     for meta in metadata:
-        if not all(i in meta for i in ["path", "dandi_path", "external_file_objects"]):
+        if any(
+            i not in meta
+            for i in ["path", "dandi_path", "external_file_objects"]
+        ):
             lgr.warning(
                 "could not rename external files, update metadata "
                 'with "path", "dandi_path", "external_file_objects"'
@@ -318,16 +313,14 @@ def rename_nwb_external_files(metadata: list[dict], dandiset_path: str) -> None:
         with NWBHDF5IO(dandiset_nwbfile_path, mode="r+", load_namespaces=True) as io:
             nwb = io.read()
             for ext_file_dict in meta["external_file_objects"]:
-                # retrieve nwb neurodata object of the given object id:
-                container_list = [
+                if container_list := [
                     child
                     for child in nwb.children
                     if ext_file_dict["id"] == child.object_id
-                ]
-                if len(container_list) == 0:
-                    continue
-                else:
+                ]:
                     container = container_list[0]
+                else:
+                    continue
                 # rename all external files:
                 for no, (name_old, name_new) in enumerate(
                     zip(
@@ -361,20 +354,20 @@ def validate(path: str | Path, devel_debug: bool = False) -> list[ValidationResu
         else:  # Fallback if an older version
             with pynwb.NWBHDF5IO(path=path, mode="r", load_namespaces=True) as reader:
                 error_outputs = pynwb.validate(io=reader)
-        for error_output in error_outputs:
-            errors.append(
-                ValidationResult(
-                    origin=ValidationOrigin(
-                        name="pynwb",
-                        version=pynwb.__version__,
-                    ),
-                    severity=Severity.WARNING,
-                    id=f"pywnb.{error_output}",
-                    scope=Scope.FILE,
-                    path=Path(path),
-                    message="Failed to validate.",
-                )
+        errors.extend(
+            ValidationResult(
+                origin=ValidationOrigin(
+                    name="pynwb",
+                    version=pynwb.__version__,
+                ),
+                severity=Severity.WARNING,
+                id=f"pywnb.{error_output}",
+                scope=Scope.FILE,
+                path=Path(path),
+                message="Failed to validate.",
             )
+            for error_output in error_outputs
+        )
     except Exception as exc:
         if devel_debug:
             raise
@@ -409,20 +402,20 @@ def validate(path: str | Path, devel_debug: bool = False) -> list[ValidationResu
             # Explicitly sanitize so we collect warnings.
             nwb_errors: list[str] = []
             version = _sanitize_nwb_version(version, log=nwb_errors.append)
-            for e in nwb_errors:
-                errors.append(
-                    ValidationResult(
-                        origin=ValidationOrigin(
-                            name="pynwb",
-                            version=pynwb.__version__,
-                        ),
-                        severity=Severity.ERROR,
-                        id="pywnb.GENERIC",
-                        scope=Scope.FILE,
-                        path=Path(path),
-                        message=e,
-                    )
+            errors.extend(
+                ValidationResult(
+                    origin=ValidationOrigin(
+                        name="pynwb",
+                        version=pynwb.__version__,
+                    ),
+                    severity=Severity.ERROR,
+                    id="pywnb.GENERIC",
+                    scope=Scope.FILE,
+                    path=Path(path),
+                    message=e,
                 )
+                for e in nwb_errors
+            )
             # Do we really need this custom internal function? string comparison works fine.
             try:
                 v = semantic_version.Version(version)
@@ -525,7 +518,7 @@ def copy_nwb_file(src: str | Path, dest: str | Path) -> str:
 
 @metadata_cache.memoize_path
 def nwb_has_external_links(filepath: str | Path | Readable) -> bool:
-    with open_readable(filepath) as f, h5py.File(f, "r") as fp:
+    with (open_readable(filepath) as f, h5py.File(f, "r") as fp):
         visited = set()
 
         # cannot use `file.visititems` because it skips external links
@@ -533,7 +526,7 @@ def nwb_has_external_links(filepath: str | Path | Readable) -> bool:
         def visit(path: str = "/") -> bool:
             if isinstance(fp[path], h5py.Group):
                 for key in fp[path].keys():
-                    key_path = path + "/" + key
+                    key_path = f"{path}/{key}"
                     if key_path not in visited:
                         visited.add(key_path)
                         if isinstance(
@@ -548,7 +541,4 @@ def nwb_has_external_links(filepath: str | Path | Readable) -> bool:
 
 
 def open_readable(r: str | Path | Readable) -> IO[bytes]:
-    if isinstance(r, Readable):
-        return r.open()
-    else:
-        return open(r, "rb")
+    return r.open() if isinstance(r, Readable) else open(r, "rb")

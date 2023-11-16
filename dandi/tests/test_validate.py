@@ -13,7 +13,7 @@ from ..validate_types import Scope, Severity, ValidationOrigin, ValidationResult
 def test_validate_nwb_error(simple3_nwb: Path) -> None:
     """Do we fail on critical NWB validation errors?"""
     validation_result = validate(simple3_nwb)
-    assert len([i for i in validation_result if i.severity]) > 0
+    assert [i for i in validation_result if i.severity]
 
 
 def test_validate_relative_path(
@@ -44,7 +44,7 @@ def test_validate_just_dandiset_yaml(tmp_path: Path) -> None:
     (tmp_path / dandiset_metadata_file).write_text(
         "identifier: 12346\nname: Foo\ndescription: Dandiset Foo\n"
     )
-    assert list(validate(tmp_path)) == []
+    assert not list(validate(tmp_path))
 
 
 @pytest.mark.parametrize("dataset", BIDS_TESTDATA_SELECTION)
@@ -94,7 +94,7 @@ def test_validate_bids_errors(bids_error_examples: Path, dataset: str) -> None:
         expected_errors = json.load(f)
 
     # We know that these datasets contain errors.
-    assert len(validation_result) > 0
+    assert validation_result
 
     # But are they the right errors?
     for i in validation_result:

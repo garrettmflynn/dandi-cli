@@ -52,12 +52,7 @@ on_msys_tainted_paths = (
     and os.environ.get("MSYSTEM", "")[:4] in ("MSYS", "MING")
 )
 
-USER_AGENT = "dandi/{} requests/{} {}/{}".format(
-    __version__,
-    requests.__version__,
-    platform.python_implementation(),
-    platform.python_version(),
-)
+USER_AGENT = f"dandi/{__version__} requests/{requests.__version__} {platform.python_implementation()}/{platform.python_version()}"
 
 
 class Hasher(Protocol):
@@ -116,10 +111,7 @@ def get_utcnow_datetime(microseconds: bool = True) -> datetime.datetime:
     If string representation is desired, just "apply" .isoformat()
     """
     ret = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).astimezone()
-    if microseconds:
-        return ret
-    else:
-        return ret.replace(microsecond=0)
+    return ret if microseconds else ret.replace(microsecond=0)
 
 
 def is_same_time(
@@ -295,9 +287,7 @@ def find_files(
             return True
         if exclude_vcs and re.search(_VCS_REGEX, path):
             return True
-        if exclude_datalad and re.search(_DATALAD_REGEX, path):
-            return True
-        return False
+        return bool(exclude_datalad and re.search(_DATALAD_REGEX, path))
 
     def good_file(path: str) -> bool:
         return bool(re.search(regex, path)) and not exclude_path(path)
@@ -318,9 +308,6 @@ def find_files(
                 )
             elif good_file(str(path)):
                 yield str(path)
-            else:
-                # Provided path didn't match regex, thus excluded
-                pass
         return
     elif op.isfile(paths):
         if good_file(str(paths)):
@@ -410,11 +397,7 @@ def find_parent_directory_containing(
     Returns None if no such found, pathlib's Path (absolute) to the directory
     if found.
     """
-    if not path:
-        path = Path.cwd()
-    else:  # assure pathlib object
-        path = Path(path)
-
+    path = Path.cwd() if not path else Path(path)
     if not path.is_absolute():
         path = path.absolute()
 
@@ -497,24 +480,19 @@ def path_is_subpath(path: str, prefix: str) -> bool:
 
 def shortened_repr(value: Any, length: int = 30) -> str:
     try:
-        if hasattr(value, "__repr__") and (value.__repr__ is not object.__repr__):
-            value_repr = repr(value)
-            if not value_repr.startswith("<") and len(value_repr) > length:
-                value_repr = "<<%s++%d chars++%s>>" % (
-                    value_repr[: length - 16],
-                    len(value_repr) - (length - 16 + 4),
-                    value_repr[-4:],
-                )
-            elif (
-                value_repr.startswith("<")
-                and value_repr.endswith(">")
-                and " object at 0x"
-            ):
-                raise ValueError("I hate those useless long reprs")
-        else:
+        if not hasattr(value, "__repr__") or value.__repr__ is object.__repr__:
             raise ValueError("gimme class")
+        value_repr = repr(value)
+        if not value_repr.startswith("<") and len(value_repr) > length:
+            value_repr = "<<%s++%d chars++%s>>" % (
+                value_repr[: length - 16],
+                len(value_repr) - (length - 16 + 4),
+                value_repr[-4:],
+            )
+        elif value_repr.startswith("<") and value_repr.endswith(">"):
+            raise ValueError("I hate those useless long reprs")
     except Exception:
-        value_repr = "<%s>" % value.__class__.__name__.split(".")[-1]
+        value_repr = f'<{value.__class__.__name__.split(".")[-1]}>'
     return value_repr
 
 
@@ -574,11 +552,10 @@ def get_instance(dandi_instance_id: str | DandiInstance) -> DandiInstance:
     else:
         dandi_id = dandi_instance_id
         instance = known_instances[dandi_id]
-    if redirector_url is None:
-        assert instance is not None
-        return _get_instance(instance.api.rstrip("/"), True, instance, dandi_id)
-    else:
+    if redirector_url is not None:
         return _get_instance(redirector_url.rstrip("/"), is_api, instance, dandi_id)
+    assert instance is not None
+    return _get_instance(instance.api.rstrip("/"), True, instance, dandi_id)
 
 
 @lru_cache
@@ -596,14 +573,13 @@ def _get_instance(
         server_info = ServerInfo.parse_obj(r.json())
     except Exception as e:
         lgr.warning("Request to %s failed (%s)", url, str(e))
-        if instance is not None:
-            lgr.warning("Using hard-coded URLs")
-            return instance
-        else:
+        if instance is None:
             raise RuntimeError(
                 f"Could not retrieve server info from {url},"
                 " and client does not recognize URL"
             )
+        lgr.warning("Using hard-coded URLs")
+        return instance
     try:
         minversion = Version(server_info.cli_minimal_version)
         bad_versions = [Version(v) for v in server_info.cli_bad_versions]
@@ -661,10 +637,7 @@ def get_module_version(module: str | types.ModuleType) -> str | None:
         modobj = module
         mod_name = module.__name__.split(".", 1)[0]
 
-    if modobj is not None:
-        version = getattr(modobj, "__version__", None)
-    else:
-        version = None
+    version = getattr(modobj, "__version__", None) if modobj is not None else None
     if version is None:
         # Let's use the standard Python mechanism if underlying module
         # did not provide __version__
@@ -678,10 +651,9 @@ def get_module_version(module: str | types.ModuleType) -> str | None:
 def pluralize(n: int, word: str, plural: str | None = None) -> str:
     if n == 1:
         return f"{n} {word}"
-    else:
-        if plural is None:
-            plural = word + "s"
-        return f"{n} {plural}"
+    if plural is None:
+        plural = f"{word}s"
+    return f"{n} {plural}"
 
 
 def abbrev_prompt(msg: str, *options: str) -> str:
@@ -729,7 +701,7 @@ def get_mime_type(filename: str, strict: bool = False) -> str:
         # 8460; exactly when can that be used?
         # return mtype + '+gzip'
     else:
-        return "application/x-" + encoding
+        return f"application/x-{encoding}"
 
 
 def check_dandi_version() -> None:

@@ -169,15 +169,14 @@ class ParsedDandiURL(ABC, BaseModel):
                 dandiset = self.get_dandiset(client, lazy=not strict)
             except requests.HTTPError as e:
                 if (
-                    e.response is not None
-                    and e.response.status_code == 401
-                    and authenticate is not False
+                    e.response is None
+                    or e.response.status_code != 401
+                    or authenticate is False
                 ):
-                    lgr.info("Resource requires authentication; authenticating ...")
-                    client.dandi_authenticate()
-                    dandiset = self.get_dandiset(client, lazy=not strict)
-                else:
                     raise
+                lgr.info("Resource requires authentication; authenticating ...")
+                client.dandi_authenticate()
+                dandiset = self.get_dandiset(client, lazy=not strict)
             assets = self.get_assets(client, strict=strict)
             yield (client, dandiset, assets)
 
@@ -257,9 +256,8 @@ class MultiAssetURL(ParsedDandiURL):
         return multiasset_target(self.path, asset.path.lstrip("/"))
 
     def is_under_download_path(self, path: str) -> bool:
-        prefix = posixpath.dirname(self.path.strip("/"))
-        if prefix:
-            return path.startswith(prefix + "/")
+        if prefix := posixpath.dirname(self.path.strip("/")):
+            return path.startswith(f"{prefix}/")
         else:
             return path.startswith(self.path)
 
@@ -402,7 +400,7 @@ class AssetItemURL(SingleAssetURL):
             if strict:
                 raise
             try:
-                next(dandiset.get_assets_with_path_prefix(self.path + "/"))
+                next(dandiset.get_assets_with_path_prefix(f"{self.path}/"))
             except NotFoundError:
                 # Dandiset has explicit version that doesn't exist.
                 return
@@ -724,9 +722,7 @@ class _dandi_url_parser:
                     parsed_url = cls.parse(url, map_instance=False, glob=glob)
                     if settings["map_instance"] not in known_instances:
                         raise ValueError(
-                            "Unknown instance {}. Known are: {}".format(
-                                settings["map_instance"], ", ".join(known_instances)
-                            )
+                            f'Unknown instance {settings["map_instance"]}. Known are: {", ".join(known_instances)}'
                         )
                     parsed_url.instance = get_instance(settings["map_instance"])
                 continue  # in this run we ignore and match further
